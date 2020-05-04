@@ -112,8 +112,12 @@ int main (int argc, char** argv)
 /*****************************************************************************/
 /*                  Code for sending datagram to server                      */
     /* Loop until the user is finished */
-    if (fgets(sendLine, MAXLINE, stdin) != NULL) {
+    //if (fgets(sendLine, MAXLINE, stdin) != NULL) {
+    { 
+        int i; 
+        sendLine = "test test test";
 
+    for(i=0; i<10; i++){
         /* Send sendLine to the server */
         if ( ( wolfSSL_write(ssl, sendLine, strlen(sendLine)))
                 != strlen(sendLine)) {
@@ -133,6 +137,7 @@ int main (int argc, char** argv)
         /* Add a terminating character to the generic server message */
         recvLine[n] = '\0';
         fputs(recvLine, stdout);
+    }
     }
 /*                End code for sending datagram to server                    */
 /*****************************************************************************/
