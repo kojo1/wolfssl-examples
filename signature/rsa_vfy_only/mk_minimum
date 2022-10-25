@@ -1,10 +1,10 @@
-WOLFROOT = ../../../wolfssl
+WOLFROOT = /Users/kojo/wolfWorks/wolfssl
 
 CFLAGS = -DWOLFSSL_USER_SETTINGS -I. -I$(WOLFROOT) -Os -g
 
 OBJ =\
 	$(WOLFROOT)/wolfcrypt/src/rsa.o\
-	$(WOLFROOT)/wolfcrypt/src/sp_int.o\
+	$(WOLFROOT)/wolfcrypt/src/tfm.o\
 	$(WOLFROOT)/wolfcrypt/src/sha256.o\
 	$(WOLFROOT)/wolfcrypt/src/hash.o\
 	$(WOLFROOT)/wolfcrypt/src/random.o\

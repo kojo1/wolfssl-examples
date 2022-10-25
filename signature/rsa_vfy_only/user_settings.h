@@ -1,4 +1,6 @@
 
+#define USE_FAST_MATH
+
 #define NO_SIG_WRAPPER // -0
 
 #define WOLFCRYPT_ONLY
@@ -36,8 +38,8 @@
 // #define WOLFSSL_SP_NO_3072
 // #define WOLFSSL_SP_NO_2048  // -0
 // #define WOLFSSL_SP_FAST_MODEXP
-#define WOLFSSL_SP_NO_DYN_STACK
-#define WOLFSSL_SP_SMALL
+//#define WOLFSSL_SP_NO_DYN_STACK
+//#define WOLFSSL_SP_SMALL
 // #define WOLFSSL_HAVE_SP_DH
 // #define WOLFSSL_HAVE_SP_RSA
 
