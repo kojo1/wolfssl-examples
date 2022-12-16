@@ -53,6 +53,7 @@
 #define WOLFSSL_SP_MATH
 #define WOLFSSL_SP_MATH_ALL
 #define SP_WORD_SIZE 64
+#define HAVE___UINT128_T
 #undef USE_FAST_MATH
 #endif
 
