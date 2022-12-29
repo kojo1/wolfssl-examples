@@ -23,11 +23,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include<sys/types.h>
+#include <sys/types.h>
 
 /* socket includes */
 #include <sys/socket.h>
-#include<netdb.h>
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
@@ -35,7 +35,7 @@
 /* wolfSSL */
 #include <wolfssl/options.h>
 #include <wolfssl/ssl.h>
-#include<wolfssl/wolfcrypt/coding.h>
+#include <wolfssl/wolfcrypt/coding.h>
 
 
 int main(int argc, char** argv)
@@ -237,17 +237,11 @@ int main(int argc, char** argv)
         goto cleanup;
     }
 
-    /* Get the right encoded mail address length */
-    for(len=0;len<sizeof(buff);len++){
-        if(buff[len] =='\n') break;
-    }
-
     /*Change the line end to CRLF */
-    strcpy(buff+len,"\r\n");
+    strcpy(buff+outLen,"\r\n");
 
     /* Send encoded email address to the server */
-    len = strnlen(buff, sizeof(buff));
-    if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
+    if ((ret = wolfSSL_write(ssl, buff, outLen+2)) != len) {
         fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
@@ -299,7 +293,8 @@ int main(int argc, char** argv)
 
     /* Send the encoded password to the server */
     len = strnlen(buff, sizeof(buff));
-    for (int i = 0;i<=len;i++) printf("%d ",buff[i]);
+    for (int i = 0;i<=len;i++)
+        printf("%d ",buff[i]);
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
         fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
@@ -324,20 +319,13 @@ int main(int argc, char** argv)
     /* Get the sender mail address */
     printf("Mail From: ");
     memset(plain,0,sizeof(plain));
-    if (fgets(plain, sizeof(plain), stdin) == NULL) {
+    strcpy(plain, oversslCmd[7]);
+    if (fgets(plain + strlen(oversslCmd[7]), sizeof(plain), stdin) == NULL) {
         fprintf(stderr, "ERROR: failed to get sender mail address.\n");
         ret = -1;
         goto cleanup;
     }
-    /* Get the right sender mail address length */
-    for(len = 0;len <sizeof(plain);len++){
-        if((plain[len] == '\n') || (plain[len] == ' ')) break;
-    }
-    /* Compose the sender mail address */
-    memset(buff,0,sizeof(buff));
-    strcpy(buff,oversslCmd[7]);
-    memcpy(buff+strlen(oversslCmd[7]),plain,len);
-    strcat(buff,">\r\n");
+    strcat(plain, ">\r\n");
     printf("%s\n", buff);
 
     /* Send the sender mail address to the server */
