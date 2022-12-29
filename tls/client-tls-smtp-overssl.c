@@ -149,7 +149,7 @@ int main(int argc, char** argv)
         "To: ",
         "From: ",
         "250",
-        "quit\r\n",
+        "QUIT\r\n",
         "221"
 
     };
@@ -165,14 +165,14 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[0],strlen(oversslCmd[0]))) {
         printf("%s\n", buff);
     } else {
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"%s\n",buff);
         goto cleanup;
     }
 
     /* Send "EHLO mail.example.com\r\n" to the server */
     len =strlen(oversslCmd[1]);
     if ((ret = wolfSSL_write(ssl, oversslCmd[1], len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -187,14 +187,15 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[2],strlen(oversslCmd[2]))) {
         printf("%s\n", buff);
     } else {
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
     /* Send "AUTH LOGIN\r\n" to the server */
     len = strlen(oversslCmd[3]);
     if ((ret = wolfSSL_write(ssl, oversslCmd[3], len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -209,7 +210,8 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[4],strlen(oversslCmd[4]))) {
         printf("%s\n", buff);
     } else {
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
@@ -217,7 +219,7 @@ int main(int argc, char** argv)
     printf("Mail Address: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
-        fprintf(stderr, "ERROR: failed to get message for server\n");
+        fprintf(stderr, "ERROR: failed to get mail address.\n");
         ret = -1;
         goto cleanup;
     }
@@ -237,7 +239,7 @@ int main(int argc, char** argv)
 
     /* Get the right encoded mail address length */
     for(len=0;len<sizeof(buff);len++){
-        if((buff[len] =='\n') || buff[len] == '=') break;
+        if(buff[len] =='\n') break;
     }
 
     /*Change the line end to CRLF */
@@ -246,7 +248,7 @@ int main(int argc, char** argv)
     /* Send encoded email address to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -261,8 +263,8 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[5],strlen(oversslCmd[5]))) {
         printf("%s\n", buff);
     } else {
+        fprintf(stderr,"ERROR: incorrect command received\n");
         printf("%s\n", buff);
-        fprintf(stderr,"incorrect command received\n");
         goto cleanup;
     }
 
@@ -270,7 +272,7 @@ int main(int argc, char** argv)
     printf("Password: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
-        fprintf(stderr, "ERROR: failed to get message for server\n");
+        fprintf(stderr, "ERROR: failed to get password\n");
         ret = -1;
         goto cleanup;
     }
@@ -294,16 +296,12 @@ int main(int argc, char** argv)
 
     /* Change the line end to CRLF */
     strcpy(buff+len,"\r\n");
-    printf("%s\n",buff);
 
     /* Send the encoded password to the server */
     len = strnlen(buff, sizeof(buff));
-    printf("%ld\n",len);
-    printf("%s\n",buff);
     for (int i = 0;i<=len;i++) printf("%d ",buff[i]);
-    printf("\n");
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -318,8 +316,8 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[6],strlen(oversslCmd[6]))) {
         printf("%s\n", buff);
     } else {
-        printf("%s\n",buff);
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
@@ -327,7 +325,7 @@ int main(int argc, char** argv)
     printf("Mail From: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
-        fprintf(stderr, "ERROR: failed to get message for server\n");
+        fprintf(stderr, "ERROR: failed to get sender mail address.\n");
         ret = -1;
         goto cleanup;
     }
@@ -345,7 +343,7 @@ int main(int argc, char** argv)
     /* Send the sender mail address to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -360,8 +358,8 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[8],strlen(oversslCmd[8]))) {
         printf("%s\n", buff);
     } else {
+        fprintf(stderr,"ERROR: incorrect command received\n");
         printf("%s\n", buff);
-        fprintf(stderr,"incorrect command received\n");
         goto cleanup;
     }
 
@@ -387,7 +385,7 @@ int main(int argc, char** argv)
     /* Send the receiver mail address to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -402,15 +400,15 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[10],strlen(oversslCmd[10]))) {
         printf("%s\n", buff);
     } else {
+        fprintf(stderr,"ERROR: incorrect command received\n");
         printf("%s\n", buff);
-        fprintf(stderr,"incorrect command received\n");
         goto cleanup;
     }
     /* Send "DATA\r\n" to the server */
     memset(buff,0,sizeof(buff));
     len = strlen(oversslCmd[11]);
     if ((ret = wolfSSL_write(ssl, oversslCmd[11], len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -425,19 +423,17 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[12],strlen(oversslCmd[12]))) {
         printf("%s\n", buff);
     } else {
-        printf("%s\n",buff);
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
-
     /* Compose the mail */
-
     /* Get the Subject */
     printf("Subject: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
-        fprintf(stderr, "ERROR: failed to get message for server\n");
+        fprintf(stderr, "ERROR: failed to get the mail subject.\n");
         ret = -1;
         goto cleanup;
     }
@@ -445,20 +441,21 @@ int main(int argc, char** argv)
         if(plain[len] == '\0') break;
     }
 
+    /* subject */
     memset(buff,0,sizeof(buff));
     strcpy(buff,oversslCmd[13]);
     strcpy(buff+strlen(buff),plain);
     strcpy(buff+strlen(buff),"\r\n");
-    printf("%s\n", buff);
 
     /* Send the mail Subject to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send the mail subject.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
 
+    /* Receiver mail address */
     printf("To: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
@@ -469,21 +466,21 @@ int main(int argc, char** argv)
     for(len = 0;len <sizeof(plain);len++){
         if(plain[len] == '\0') break;
     }
-
+    /* Compose the reveiver mail address */
     memset(buff,0,sizeof(buff));
     strcpy(buff,oversslCmd[14]);
     strcpy(buff+strlen(buff),plain);
     strcpy(buff+strlen(buff),"\r\n");
-    printf("%s\n", buff);
 
     /* Send the receiver mail address to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send the receiver mail address.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
 
+    /* Sender mail address */
     printf("From: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
@@ -494,42 +491,40 @@ int main(int argc, char** argv)
     for(len = 0;len <sizeof(plain);len++){
         if(plain[len] == '\0') break;
     }
-
+    /* Compose the sender mail address */
     memset(buff,0,sizeof(buff));
     strcpy(buff,oversslCmd[15]);
     strcpy(buff+strlen(buff),plain);
     strcpy(buff+strlen(buff),"\r\n");
-    printf("%s\n", buff);
 
     /* Send the sender mail address to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send the sender mail address.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
 
-    /* Compose the main message */
+    /* main message */
     printf("main message: ");
     memset(plain,0,sizeof(plain));
     if (fgets(plain, sizeof(plain), stdin) == NULL) {
-        fprintf(stderr, "ERROR: failed to get message for server\n");
+        fprintf(stderr, "ERROR: failed to get message.\n");
         ret = -1;
         goto cleanup;
     }
     for(len = 0;len <sizeof(plain);len++){
         if(plain[len] == '\0') break;
     }
-
+    /* Compose the message */
     memset(buff,0,sizeof(buff));
     strcpy(buff+strlen(buff),plain);
     strcpy(buff+strlen(buff),"\r\n");
-    printf("%s\n", buff);
 
     /* Send the main message to the server */
     len = strnlen(buff, sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send message.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -539,11 +534,10 @@ int main(int argc, char** argv)
     strcpy(buff,".\r\n");
     len = strnlen(buff,sizeof(buff));
     if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
-
 
     /* Read the server data into our buff array */
     memset(buff, 0, sizeof(buff));
@@ -555,15 +549,16 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[16],strlen(oversslCmd[16]))) {
         printf("%s\n", buff);
     } else {
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
-    /* Send "quit\r\n" to the server */
+    /* Send "QUIT\r\n" to the server */
     memset(buff,0,sizeof(buff));
     len = strlen(oversslCmd[17]);
     if ((ret = wolfSSL_write(ssl, oversslCmd[17], len)) != len) {
-        fprintf(stderr, "ERROR: failed to send HTTP GET request.\n");
+        fprintf(stderr, "ERROR: failed to send command.\n");
         fprintf(stderr, "%d bytes of %d bytes were sent", ret, (int) len);
         goto cleanup;
     }
@@ -578,7 +573,8 @@ int main(int argc, char** argv)
     if (!strncmp(buff, oversslCmd[18],strlen(oversslCmd[18]))) {
         printf("%s\n", buff);
     } else {
-        fprintf(stderr,"incorrect command received\n");
+        fprintf(stderr,"ERROR: incorrect command received\n");
+        printf("%s\n", buff);
         goto cleanup;
     }
 
