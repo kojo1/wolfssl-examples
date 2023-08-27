@@ -1,6 +1,32 @@
+/*
+ * client-dtls.c
+ *
+ * Copyright (C) 2006-2020 wolfSSL Inc.
+ *
+ * This file is part of wolfSSL. (formerly known as CyaSSL)
+ *
+ * wolfSSL is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * wolfSSL is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
+ *
+ *=============================================================================
+ *
+ * Bare-bones example of a DTLS client for instructional/learning purposes.
+ */
+
+#include <wolfssl/options.h>
 #include <unistd.h>
-#include <cyassl/ssl.h>
-#include <cyassl/options.h>
+#include <wolfssl/ssl.h>
 #include <netdb.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -11,69 +37,54 @@
 #include <string.h>
 
 #define MAXLINE   4096
-#define SERV_PORT 11111 
+#define SERV_PORT 11111
 
-/* Send and receive function */
-void DatagramClient (CYASSL* ssl) 
+int main (int argc, char** argv)
 {
-    int  n = 0;
-    char sendLine[MAXLINE], recvLine[MAXLINE - 1];
+    /* standard variables used in a dtls client*/
+    int             n = 0;
+    int             sockfd = 0;
+    int             err1;
+    int             readErr;
+    struct          sockaddr_in servAddr;
+    WOLFSSL*        ssl = 0;
+    WOLFSSL_CTX*    ctx = 0;
+    char            cert_array[]  = "../certs/ca-cert.pem";
+    char*           certs = cert_array;
+    char            sendLine[MAXLINE];
+    char            recvLine[MAXLINE - 1];
 
-    while (fgets(sendLine, MAXLINE, stdin) != NULL) {
-    
-       if ( ( CyaSSL_write(ssl, sendLine, strlen(sendLine))) != 
-	      strlen(sendLine)) {
-            printf("SSL_write failed");
-        }
-
-       n = CyaSSL_read(ssl, recvLine, sizeof(recvLine)-1);
-       
-       if (n < 0) {
-            int readErr = CyaSSL_get_error(ssl, 0);
-	        if(readErr != SSL_ERROR_WANT_READ) {
-		        printf("CyaSSL_read failed");
-            }
-       }
-
-        recvLine[n] = '\0';  
-        fputs(recvLine, stdout);
-    }
-}
-
-int main (int argc, char** argv)  
-{
-    int     	sockfd = 0;
-    struct  	sockaddr_in servAddr;
-    CYASSL* 	ssl = 0;
-    CYASSL_CTX* ctx = 0;
-    char        cert_array[]  = "../certs/ca-cert.pem";
-    char*       certs = cert_array;
-
-    if (argc != 2) { 
-        printf("usage: udpcli <IP address>\n");
+    /* Program argument checking */
+    if (argc != 2) {
+        printf("usage: %s <IP address>\n", argv[0]);
         return 1;
     }
 
-    CyaSSL_Init();
-    /* CyaSSL_Debugging_ON(); */
-   
-    if ( (ctx = CyaSSL_CTX_new(CyaDTLSv1_2_client_method())) == NULL) {
-        fprintf(stderr, "CyaSSL_CTX_new error.\n");
+    /* Initialize wolfSSL before assigning ctx */
+    wolfSSL_Init();
+  
+    /* wolfSSL_Debugging_ON(); */
+
+    if ( (ctx = wolfSSL_CTX_new(wolfDTLSv1_2_client_method())) == NULL) {
+        fprintf(stderr, "wolfSSL_CTX_new error.\n");
         return 1;
     }
 
-    if (CyaSSL_CTX_load_verify_locations(ctx, certs, 0) 
+    /* Load certificates into ctx variable */
+    if (wolfSSL_CTX_load_verify_locations(ctx, certs, 0)
 	    != SSL_SUCCESS) {
         fprintf(stderr, "Error loading %s, please check the file.\n", certs);
         return 1;
     }
 
-    ssl = CyaSSL_new(ctx);
+    /* Assign ssl variable */
+    ssl = wolfSSL_new(ctx);
     if (ssl == NULL) {
-    	printf("unable to get ssl object");
+        printf("unable to get ssl object");
         return 1;
     }
 
+    /* servAddr setup */
     memset(&servAddr, 0, sizeof(servAddr));
     servAddr.sin_family = AF_INET;
     servAddr.sin_port = htons(SERV_PORT);
@@ -82,28 +93,56 @@ int main (int argc, char** argv)
         return 1;
     }
 
-    CyaSSL_dtls_set_peer(ssl, &servAddr, sizeof(servAddr));
-    
-    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) { 
-       printf("cannot create a socket."); 
+    wolfSSL_dtls_set_peer(ssl, &servAddr, sizeof(servAddr));
+
+    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+       printf("cannot create a socket.");
        return 1;
     }
-    CyaSSL_set_fd(ssl, sockfd);
-    if (CyaSSL_connect(ssl) != SSL_SUCCESS) {
-	    int err1 = CyaSSL_get_error(ssl, 0);
-	    printf("err = %d, %s\n", err1, CyaSSL_ERR_reason_error_string(err1));
+
+    /* Set the file descriptor for ssl and connect with ssl variable */
+    wolfSSL_set_fd(ssl, sockfd);
+    if (wolfSSL_connect(ssl) != SSL_SUCCESS) {
+	    err1 = wolfSSL_get_error(ssl, 0);
+	    printf("err = %d, %s\n", err1, wolfSSL_ERR_reason_error_string(err1));
 	    printf("SSL_connect failed");
         return 1;
     }
- 
-    DatagramClient(ssl);
 
-    CyaSSL_shutdown(ssl);
-    CyaSSL_free(ssl);
+/*****************************************************************************/
+/*                  Code for sending datagram to server                      */
+    /* Loop until the user is finished */
+    if (fgets(sendLine, MAXLINE, stdin) != NULL) {
+
+        /* Send sendLine to the server */
+        if ( ( wolfSSL_write(ssl, sendLine, strlen(sendLine)))
+                != strlen(sendLine)) {
+            printf("SSL_write failed");
+        }
+
+        /* n is the # of bytes received */
+        n = wolfSSL_read(ssl, recvLine, sizeof(recvLine)-1);
+
+        if (n < 0) {
+            readErr = wolfSSL_get_error(ssl, 0);
+            if (readErr != SSL_ERROR_WANT_READ) {
+                printf("wolfSSL_read failed");
+            }
+        }
+
+        /* Add a terminating character to the generic server message */
+        recvLine[n] = '\0';
+        fputs(recvLine, stdout);
+    }
+/*                End code for sending datagram to server                    */
+/*****************************************************************************/
+
+    /* Housekeeping */
+    wolfSSL_shutdown(ssl);
+    wolfSSL_free(ssl);
     close(sockfd);
-    CyaSSL_CTX_free(ctx);
-    CyaSSL_Cleanup();
+    wolfSSL_CTX_free(ctx);
+    wolfSSL_Cleanup();
 
     return 0;
 }
-

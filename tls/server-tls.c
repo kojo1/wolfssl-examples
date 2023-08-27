@@ -1,190 +1,219 @@
 /* server-tls.c
  *
- * Copyright (C) 2006-2014 wolfSSL Inc.
+ * Copyright (C) 2006-2020 wolfSSL Inc.
  *
- * This file is part of CyaSSL.
+ * This file is part of wolfSSL. (formerly known as CyaSSL)
  *
- * CyaSSL is free software; you can redistribute it and/or modify
+ * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * CyaSSL is distributed in the hope that it will be useful,
+ * wolfSSL is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,  * USA
- * =============================================================================
- *
- * This is a super basic example of what a TCP Server secured with TLS 1.2
- * might look like. This server can also resume the session if a client 
- * nadvertantly disconnects. 
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <string.h>
-#include <netinet/in.h>
+/* the usual suspects */
 #include <stdlib.h>
-#include <errno.h>
+#include <stdio.h>
+#include <string.h>
 
-/* include the CyaSSL library for our TLS 1.2 security */
-#include <cyassl/ssl.h>
+/* socket includes */
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <unistd.h>
+
+/* wolfSSL */
+#include <wolfssl/options.h>
+#include <wolfssl/ssl.h>
 
 #define DEFAULT_PORT 11111
 
-int AcceptAndRead(CYASSL_CTX* ctx, socklen_t sockfd, struct sockaddr_in 
-    clientAddr);
+#define CERT_FILE "../certs/server-cert.pem"
+#define KEY_FILE  "../certs/server-key.pem"
 
-int AcceptAndRead(CYASSL_CTX* ctx, socklen_t sockfd, struct sockaddr_in 
-    clientAddr)
-{
-        /* Create our reply message */
-    const char reply[]  = "I hear ya fa shizzle!\n";
-    socklen_t         size    = sizeof(clientAddr);
-
-    /* Wait until a client connects */
-    socklen_t connd = accept(sockfd, (struct sockaddr *)&clientAddr, &size);
-
-    /* If fails to connect,int loop back up and wait for a new connection */
-    if (connd == -1) {
-        printf("failed to accept the connection..\n");
-    }
-    /* If it connects, read in and reply to the client */
-    else {
-        printf("Client connected successfully\n");
-        CYASSL*     ssl;
-
-        if ( (ssl = CyaSSL_new(ctx)) == NULL) {
-            fprintf(stderr, "CyaSSL_new error.\n");
-            exit(EXIT_FAILURE);
-        }
-
-        /* direct our ssl to our clients connection */
-        CyaSSL_set_fd(ssl, connd);
-
-        printf("Using Non-Blocking I/O: %d\n", CyaSSL_get_using_nonblock(
-            ssl));
-
-        for ( ; ; ) {
-            char buff[256];
-            int  ret = 0;
-
-            /* Clear the buffer memory for anything  possibly left over */
-            memset(&buff, 0, sizeof(buff));
-
-            /* Read the client data into our buff array */
-            if ((ret = CyaSSL_read(ssl, buff, sizeof(buff)-1)) > 0) {
-                /* Print any data the client sends to the console */
-                printf("Client: %s\n", buff);
-                
-                /* Reply back to the client */
-                if ((ret = CyaSSL_write(ssl, reply, sizeof(reply)-1)) 
-                    < 0)
-                {
-                    printf("CyaSSL_write error = %d\n", CyaSSL_get_error(ssl, ret));
-                }
-            }
-            /* if the client disconnects break the loop */
-            else {
-                if (ret < 0)
-                    printf("CyaSSL_read error = %d\n", CyaSSL_get_error(ssl
-                        ,ret));
-                else if (ret == 0)
-                    printf("The client has closed the connection.\n");
-
-                break;
-            }
-        }
-        CyaSSL_free(ssl);           /* Free the CYASSL object */
-    }
-    close(connd);               /* close the connected socket */
-
-    return 0;
-}
 
 
 int main()
 {
-    /* Create a ctx pointer for our ssl */
-    CYASSL_CTX* ctx;
+    int                sockfd = SOCKET_INVALID;
+    int                connd = SOCKET_INVALID;
+    struct sockaddr_in servAddr;
+    struct sockaddr_in clientAddr;
+    socklen_t          size = sizeof(clientAddr);
+    char               buff[256];
+    size_t             len;
+    int                shutdown = 0;
+    int                ret;
+    const char*        reply = "I hear ya fa shizzle!\n";
 
-    /* 
-     * Creates a socket that uses an internet IP address,
-     * Sets the type to be Stream based (TCP),
-     * 0 means choose the default protocol.
-     */
-    socklen_t sockfd   = socket(AF_INET, SOCK_STREAM, 0);
-    int loopExit = 0; /* 0 = False, 1 = True */
-    int ret      = 0; /* Return value */
-    /* Server and client socket address structures */
-    struct sockaddr_in serverAddr, clientAddr;
+    /* declare wolfSSL objects */
+    WOLFSSL_CTX* ctx = NULL;
+    WOLFSSL*     ssl = NULL;
 
-    /* Initialize CyaSSL */
-    CyaSSL_Init();
 
-    /* If positive value, the socket is valid */
-    if (sockfd == -1) {
-        printf("ERROR: failed to create the socket\n");
-        return EXIT_FAILURE;        /* Kill the server with exit status 1 */        
+
+    /* Initialize wolfSSL */
+    wolfSSL_Init();
+
+
+
+    /* Create a socket that uses an internet IPv4 address,
+     * Sets the socket to be stream based (TCP),
+     * 0 means choose the default protocol. */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        fprintf(stderr, "ERROR: failed to create the socket\n");
+        ret = -1;
+        goto exit;
     }
 
-    /* create and initialize CYASSL_CTX structure */
-    if ((ctx = CyaSSL_CTX_new(CyaTLSv1_2_server_method())) == NULL) {
-        fprintf(stderr, "CyaSSL_CTX_new error.\n");
-        return EXIT_FAILURE;
+
+
+    /* Create and initialize WOLFSSL_CTX */
+    if ((ctx = wolfSSL_CTX_new(wolfTLSv1_2_server_method())) == NULL) {
+        fprintf(stderr, "ERROR: failed to create WOLFSSL_CTX\n");
+        ret = -1;
+        goto exit;
     }
 
-    /* Load server certificate into CYASSL_CTX */
-    if (CyaSSL_CTX_use_certificate_file(ctx, "../certs/server-cert.pem", 
-                SSL_FILETYPE_PEM) != SSL_SUCCESS) {
-        fprintf(stderr, "Error loading certs/server-cert.pem, please check"
-                "the file.\n");
-        return EXIT_FAILURE;
+    /* Load server certificates into WOLFSSL_CTX */
+    if ((ret = wolfSSL_CTX_use_certificate_file(ctx, CERT_FILE, SSL_FILETYPE_PEM))
+        != WOLFSSL_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to load %s, please check the file.\n",
+                CERT_FILE);
+        goto exit;
     }
 
-    /* Load server key into CYASSL_CTX */
-    if (CyaSSL_CTX_use_PrivateKey_file(ctx, "../certs/server-key.pem", 
-                SSL_FILETYPE_PEM) != SSL_SUCCESS) {
-        fprintf(stderr, "Error loading certs/server-key.pem, please check"
-                "the file.\n");
-        return EXIT_FAILURE;
+    /* Load server key into WOLFSSL_CTX */
+    if ((ret = wolfSSL_CTX_use_PrivateKey_file(ctx, KEY_FILE, SSL_FILETYPE_PEM))
+        != WOLFSSL_SUCCESS) {
+        fprintf(stderr, "ERROR: failed to load %s, please check the file.\n",
+                KEY_FILE);
+        goto exit;
     }
 
-    /* Initialize the server address struct to zero */
-    memset((char *)&serverAddr, 0, sizeof(serverAddr)); 
 
-    /* Fill the server's address family */
-    serverAddr.sin_family      = AF_INET;
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port        = htons(DEFAULT_PORT);
 
-    /* Attach the server socket to our port */
-    if (bind(sockfd, (struct sockaddr *)&serverAddr, sizeof(serverAddr))
-        < 0) {
-        printf("ERROR: failed to bind\n");
-        return EXIT_FAILURE;
+    /* Initialize the server address struct with zeros */
+    memset(&servAddr, 0, sizeof(servAddr));
+
+    /* Fill in the server address */
+    servAddr.sin_family      = AF_INET;             /* using IPv4      */
+    servAddr.sin_port        = htons(DEFAULT_PORT); /* on DEFAULT_PORT */
+    servAddr.sin_addr.s_addr = INADDR_ANY;          /* from anywhere   */
+
+
+
+    /* Bind the server socket to our port */
+    if (bind(sockfd, (struct sockaddr*)&servAddr, sizeof(servAddr)) == -1) {
+        fprintf(stderr, "ERROR: failed to bind\n");
+        ret = -1; 
+        goto exit;
     }
 
-    printf("Waiting for a connection...\n");
-    /* Continuously accept connects while not currently in an active connection
-       or told to quit */
-    while (loopExit == 0) {
-        /* listen for a new connection, allow 5 pending connections */
-        ret = listen(sockfd, 5);
-        if (ret == 0) {
+    /* Listen for a new connection, allow 5 pending connections */
+    if (listen(sockfd, 5) == -1) {
+        fprintf(stderr, "ERROR: failed to listen\n");
+        ret = -1;
+        goto exit;
+    }
 
-            /* Accept client connections and read from them */
-            loopExit = AcceptAndRead(ctx, sockfd, clientAddr);
+
+
+    /* Continue to accept clients until shutdown is issued */
+    while (!shutdown) {
+        printf("Waiting for a connection...\n");
+
+        /* Accept client connections */
+        if ((connd = accept(sockfd, (struct sockaddr*)&clientAddr, &size))
+            == -1) {
+            fprintf(stderr, "ERROR: failed to accept the connection\n\n");
+            ret = -1;
+            goto exit;
         }
+
+        /* Create a WOLFSSL object */
+        if ((ssl = wolfSSL_new(ctx)) == NULL) {
+            fprintf(stderr, "ERROR: failed to create WOLFSSL object\n");
+            ret = -1;
+            goto exit;
+        }
+
+        /* Attach wolfSSL to the socket */
+        wolfSSL_set_fd(ssl, connd);
+
+        /* Establish TLS connection */
+        ret = wolfSSL_accept(ssl);
+        if (ret != WOLFSSL_SUCCESS) {
+            fprintf(stderr, "wolfSSL_accept error = %d\n",
+                wolfSSL_get_error(ssl, ret));
+            goto exit;
+        }
+
+
+        printf("Client connected successfully\n");
+
+
+
+        /* Read the client data into our buff array */
+        memset(buff, 0, sizeof(buff));
+        if ((ret = wolfSSL_read(ssl, buff, sizeof(buff)-1)) == -1) {
+            fprintf(stderr, "ERROR: failed to read\n");
+            goto exit;
+        }
+
+        /* Print to stdout any data the client sends */
+        printf("Client: %s\n", buff);
+
+        /* Check for server shutdown command */
+        if (strncmp(buff, "shutdown", 8) == 0) {
+            printf("Shutdown command issued!\n");
+            shutdown = 1;
+        }
+
+
+
+        /* Write our reply into buff */
+        memset(buff, 0, sizeof(buff));
+        memcpy(buff, reply, strlen(reply));
+        len = strnlen(buff, sizeof(buff));
+
+        /* Reply back to the client */
+        if ((ret = wolfSSL_write(ssl, buff, len)) != len) {
+            fprintf(stderr, "ERROR: failed to write\n");
+            goto exit;
+        }
+
+        /* Notify the client that the connection is ending */
+        wolfSSL_shutdown(ssl);
+        printf("Shutdown complete\n");
+
+        /* Cleanup after this connection */
+        wolfSSL_free(ssl);      /* Free the wolfSSL object              */
+        ssl = NULL;
+        close(connd);           /* Close the connection to the client   */
     }
 
-    CyaSSL_CTX_free(ctx);   /* Free CYASSL_CTX */
-    CyaSSL_Cleanup();       /* Free CyaSSL */
-    return EXIT_SUCCESS;
+    ret = 0;
+
+exit:
+    /* Cleanup and return */
+    if (ssl)
+        wolfSSL_free(ssl);      /* Free the wolfSSL object              */
+    if (connd != SOCKET_INVALID)
+        close(connd);           /* Close the connection to the client   */
+    if (sockfd != SOCKET_INVALID)
+        close(sockfd);          /* Close the socket listening for clients   */
+    if (ctx)
+        wolfSSL_CTX_free(ctx);  /* Free the wolfSSL context object          */
+    wolfSSL_Cleanup();          /* Cleanup the wolfSSL environment          */
+
+    return ret;               /* Return reporting a success               */
 }

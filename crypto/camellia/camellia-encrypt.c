@@ -1,42 +1,43 @@
 /* camellia-encrypt.c
  *
- * Copyright (C) 2006-2014 wolfSSL Inc.
- * This file is part of CyaSSL.
+ * Copyright (C) 2006-2020 wolfSSL Inc.
  *
- * CyaSSL is free software; you can redistribute it and/or modify
+ * This file is part of wolfSSL. (formerly known as CyaSSL)
+ *
+ * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * CyaSSL is distributed in the hope that it will be useful,
+ * wolfSSL is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
 #include <stdio.h>
 #include <unistd.h>
 #include <termios.h>
-#include <cyassl/options.h>
-#include <cyassl/ctaocrypt/sha256.h>
-#include <cyassl/ctaocrypt/random.h>
-#include <cyassl/ctaocrypt/pwdbased.h>
-#include <cyassl/ctaocrypt/camellia.h>
+#include <wolfssl/options.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/pwdbased.h>
+#include <wolfssl/wolfcrypt/camellia.h>
 
 #define SALT_SIZE 8
 
 /*
- * Makes a cyptographically secure key by stretMDMching a user entered key
+ * Makes a cryptographically secure key by stretching a user entered key
  */
 int GenerateKey(RNG* rng, byte* key, int size, byte* salt, int pad)
 {
     int ret;
 
-    ret = RNG_GenerateBlock(rng, salt, SALT_SIZE-1);
+    ret = wc_RNG_GenerateBlock(rng, salt, SALT_SIZE-1);
     if (ret != 0)
         return -1020;
 
@@ -44,7 +45,7 @@ int GenerateKey(RNG* rng, byte* key, int size, byte* salt, int pad)
         salt[0] = 0;            /* message is padded */
 
     /* stretches key */
-    ret = PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096, 
+    ret = wc_PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
         size, SHA256);
     if (ret != 0)
         return -1030;
@@ -53,9 +54,9 @@ int GenerateKey(RNG* rng, byte* key, int size, byte* salt, int pad)
 }
 
 /*
- * Encrypts a file using Camellia 
+ * Encrypts a file using Camellia
  */
-int CamelliaEncrypt(Camellia* cam, byte* key, int size, FILE* inFile, 
+int CamelliaEncrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     FILE* outFile)
 {
     RNG     rng;
@@ -84,39 +85,39 @@ int CamelliaEncrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     input = malloc(length);
     output = malloc(length);
 
-    ret = InitRng(&rng);
+    ret = wc_InitRng(&rng);
     if (ret != 0) {
         printf("Failed to initialize random number generator\n");
         return -1030;
     }
 
-    /* reads from inFile and wrties whatever is there to the input array */
+    /* reads from inFile and writes whatever is there to the input array */
     ret = fread(input, 1, inputLength, inFile);
     if (ret == 0) {
         printf("Input file does not exist.\n");
         return -1010;
     }
     for (i = inputLength; i < length; i++) {
-        /* padds the added characters with the number of pads */
+        /* pads the added characters with the number of pads */
         input[i] = padCounter;
     }
 
-    ret = RNG_GenerateBlock(&rng, iv, CAMELLIA_BLOCK_SIZE);
+    ret = wc_RNG_GenerateBlock(&rng, iv, CAMELLIA_BLOCK_SIZE);
     if (ret != 0)
         return -1020;
 
     /* stretches key to fit size */
     ret = GenerateKey(&rng, key, size, salt, padCounter);
-    if (ret != 0) 
+    if (ret != 0)
         return -1040;
 
     /* sets key */
-    ret = CamelliaSetKey(cam, key, CAMELLIA_BLOCK_SIZE, iv);
+    ret = wc_CamelliaSetKey(cam, key, CAMELLIA_BLOCK_SIZE, iv);
     if (ret != 0)
         return -1001;
 
-    /* encrypts the message to the ouput based on input length + padding */
-    CamelliaCbcEncrypt(cam, output, input, length);
+    /* encrypts the message to the output based on input length + padding */
+    wc_CamelliaCbcEncrypt(cam, output, input, length);
 
     /* writes to outFile */
     fwrite(salt, 1, SALT_SIZE, outFile);
@@ -132,14 +133,15 @@ int CamelliaEncrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     free(key);
     fclose(inFile);
     fclose(outFile);
+    wc_FreeRng(&rng);
 
     return 0;
 }
 
 /*
- * Decrypts a file using Camellia 
+ * Decrypts a file using Camellia
  */
-int CamelliaDecrypt(Camellia* cam, byte* key, int size, FILE* inFile, 
+int CamelliaDecrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     FILE* outFile)
 {
     RNG     rng;
@@ -161,9 +163,9 @@ int CamelliaDecrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     input = malloc(aSize);
     output = malloc(aSize);
 
-    InitRng(&rng);
+    wc_InitRng(&rng);
 
-    /* reads from inFile and wrties whatever is there to the input array */
+    /* reads from inFile and writes whatever is there to the input array */
     ret = fread(input, 1, length, inFile);
     if (ret == 0) {
         printf("Input file does not exist.\n");
@@ -179,13 +181,13 @@ int CamelliaDecrypt(Camellia* cam, byte* key, int size, FILE* inFile,
     }
 
     /* replicates old key if keys match */
-    ret = PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096, 
+    ret = wc_PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
         size, SHA256);
     if (ret != 0)
         return -1050;
 
     /* sets key */
-    ret = CamelliaSetKey(cam, key, CAMELLIA_BLOCK_SIZE, iv);
+    ret = wc_CamelliaSetKey(cam, key, CAMELLIA_BLOCK_SIZE, iv);
     if (ret != 0)
         return -1002;
 
@@ -196,7 +198,7 @@ int CamelliaDecrypt(Camellia* cam, byte* key, int size, FILE* inFile,
         input[i] = input[i + (CAMELLIA_BLOCK_SIZE + SALT_SIZE)];
     }
     /* decrypts the message to output based on input length + padding */
-    CamelliaCbcDecrypt(cam, output, input, length);
+    wc_CamelliaCbcDecrypt(cam, output, input, length);
 
     if (salt[0] != 0) {
         /* reduces length based on number of padded elements  */
@@ -231,7 +233,7 @@ void help()
 }
 
 /*
- * temporarily deisables echoing in terminal for secure key input
+ * temporarily disables echoing in terminal for secure key input
  */
 int NoEcho(char* key, int size)
 {
@@ -244,18 +246,22 @@ int NoEcho(char* key, int size)
     nflags.c_lflag |= ECHONL;
 
     if (tcsetattr(fileno(stdin), TCSANOW, &nflags) != 0) {
-        printf("Error\n");
+        printf("Error: tcsetattr failed to disable terminal echo\n");
         return -1060;
     }
 
-    printf("Key: ");
-    fgets(key, size, stdin);
+    printf("Unique Password: ");
+    if (fgets(key, size, stdin) == NULL) {
+        printf("Error: fgets failed to retrieve secure key input\n");
+        return -1070;
+    }
+
     key[strlen(key) - 1] = 0;
 
     /* restore terminal */
     if (tcsetattr(fileno(stdin), TCSANOW, &oflags) != 0) {
-        printf("Error\n");
-        return -1070;
+        printf("Error: tcsetattr failed to enable terminal echo\n");
+        return -1080;
     }
     return 0;
 }
@@ -277,8 +283,8 @@ int main(int argc, char** argv)
 {
     Camellia   cam;
     byte*  key;       /* user entered key */
-    FILE*  inFile;
-    FILE*  outFile;
+    FILE*  inFile = NULL;
+    FILE*  outFile = NULL;
 
     const char* in;
     const char* out;
@@ -338,7 +344,8 @@ int main(int argc, char** argv)
             CamelliaDecrypt(&cam, key, size, inFile, outFile);
     }
     else if (choice == 'n') {
-        printf("Must select either -e or -d for encryption and decryption\n");
+        printf("Must select either -e[128,192,256] or -d[128,192,256] for \
+                encryption and decryption\n");
     }
 
     return ret;

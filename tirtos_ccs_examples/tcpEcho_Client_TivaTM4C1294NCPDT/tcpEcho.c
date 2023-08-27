@@ -1,5 +1,5 @@
 /*
- * This file contains contributions from both TI and CyaSSL
+ * This file contains contributions from both TI and wolfSSL
  *
  * Copyright (c) 2014, Texas Instruments Incorporated
  *
@@ -32,14 +32,14 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * Copyright (c) 2006-2014, wolfSSL Inc.
+ * Copyright (c) 2006-2020, wolfSSL Inc.
  *
- * CyaSSL is free software; you can redistribute it and/or modify
+ * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * CyaSSL is distributed in the hope that it will be useful,
+ * wolfSSL is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -76,21 +76,21 @@
 /* Example/Board Header files */
 #include "Board.h"
 
-/* CyaSSL Header files */
-#include <cyassl/ssl.h>
-#include <cyassl/certs_test.h>
+/* wolfSSL Header files */
+#include <wolfssl/ssl.h>
+#include <wolfssl/certs_test.h>
 
 #define TCPPACKETSIZE 1024
 #define TCPPORT 11111
 #define NUMTCPWORKERS 3
 
-/* Set to the IP of the computer running the cyassl command from the 
- * cyassl_root directory: "./examples/server/server -b" 
+/* Set to the IP of the computer running the wolfssl command from the 
+ * wolfssl_root directory: "./examples/server/server -b" 
  * the "-b" tells the server to bind to any interface, not just 127.0.0.1
  */
 #define IP_ADDR "xxx.xxx.x.xxx"
 
-void exitApp(CYASSL_CTX* ctx);
+void exitApp(WOLFSSL_CTX* ctx);
 
 /*
  *  ======== tcpHandler ========
@@ -106,40 +106,40 @@ Void tcpHandler(UArg arg0, UArg arg1) {
 	int nbytes;
 	char *buffer;
 	char msg[] = "Hello from TM4C1294XL Connected Launchpad";
-	CYASSL* ssl = (CYASSL *) arg0;
+	WOLFSSL* ssl = (WOLFSSL *) arg0;
 
 	fdOpenSession(TaskSelf());
 
-	CyaSSL_Init();
-	CYASSL_CTX* ctx = NULL;
+	wolfSSL_Init();
+	WOLFSSL_CTX* ctx = NULL;
 
-	ctx = CyaSSL_CTX_new(CyaTLSv1_2_client_method());
+	ctx = wolfSSL_CTX_new(wolfTLSv1_2_client_method());
 	if (ctx == 0) {
-		System_printf("tcpHandler: CyaSSL_CTX_new error.\n");
+		System_printf("tcpHandler: wolfSSL_CTX_new error.\n");
 		exitApp(ctx);
 	}
 
-	if (CyaSSL_CTX_load_verify_buffer(ctx, ca_cert_der_2048,
+	if (wolfSSL_CTX_load_verify_buffer(ctx, ca_cert_der_2048,
 			sizeof(ca_cert_der_2048) / sizeof(char), SSL_FILETYPE_ASN1)
 			!= SSL_SUCCESS) {
 		System_printf("tcpHandler: Error loading ca_cert_der_2048"
-				" please check the cyassl/certs_test.h file.\n");
+				" please check the wolfssl/certs_test.h file.\n");
 		exitApp(ctx);
 	}
 
-	if (CyaSSL_CTX_use_certificate_buffer(ctx, client_cert_der_2048,
+	if (wolfSSL_CTX_use_certificate_buffer(ctx, client_cert_der_2048,
 			sizeof(client_cert_der_2048) / sizeof(char), SSL_FILETYPE_ASN1)
 			!= SSL_SUCCESS) {
 		System_printf("tcpHandler: Error loading client_cert_der_2048,"
-				" please check the cyassl/certs_test.h file.\n");
+				" please check the wolfssl/certs_test.h file.\n");
 		exitApp(ctx);
 	}
 
-	if (CyaSSL_CTX_use_PrivateKey_buffer(ctx, client_key_der_2048,
+	if (wolfSSL_CTX_use_PrivateKey_buffer(ctx, client_key_der_2048,
 			sizeof(client_key_der_2048) / sizeof(char), SSL_FILETYPE_ASN1)
 			!= SSL_SUCCESS) {
 		System_printf("tcpHandler: Error loading client_key_der_2048,"
-				" please check the cyassl/certs_test.h file.\n");
+				" please check the wolfssl/certs_test.h file.\n");
 		exitApp(ctx);
 	}
 
@@ -169,14 +169,14 @@ Void tcpHandler(UArg arg0, UArg arg1) {
 		}
 	} while (ret != 0);
 
-	if ((ssl = CyaSSL_new(ctx)) == NULL) {
-		System_printf("tcpHandler: CyaSSL_new error.\n");
+	if ((ssl = wolfSSL_new(ctx)) == NULL) {
+		System_printf("tcpHandler: wolfSSL_new error.\n");
 		exitApp(ctx);
 	}
 
-	CyaSSL_set_fd(ssl, sockfd);
+	wolfSSL_set_fd(ssl, sockfd);
 
-	ret = CyaSSL_connect(ssl);
+	ret = wolfSSL_connect(ssl);
 
 	/* Delete "TOP_LINE" and "END_LINE" for debugging. */
 
@@ -186,15 +186,15 @@ Void tcpHandler(UArg arg0, UArg arg1) {
 	 System_printf("return was: %d.\n", ret);
 	 int err;
 	 char err_buffer[80];
-	 err = CyaSSL_get_error(ssl, 0);
-	 System_printf("CyaSSL error: %d\n", err);
-	 System_printf("CyaSSL error string: %s\n", CyaSSL_ERR_error_string(err, err_buffer));
+	 err = wolfSSL_get_error(ssl, 0);
+	 System_printf("wolfSSL error: %d\n", err);
+	 System_printf("wolfSSL error string: %s\n", wolfSSL_ERR_error_string(err, err_buffer));
 
 	 END_LINE */
 
 	if (ret == SSL_SUCCESS) {
 
-		sockfd = CyaSSL_get_fd(ssl);
+		sockfd = wolfSSL_get_fd(ssl);
 
 		/* Get a buffer to receive incoming packets. Use the default heap. */
 		buffer = Memory_alloc(NULL, TCPPACKETSIZE, 0, &eb);
@@ -206,19 +206,19 @@ Void tcpHandler(UArg arg0, UArg arg1) {
 
 		/* Say hello to the server */
 		while (flag) {
-			if (CyaSSL_write(ssl, msg, strlen(msg)) != strlen(msg)) {
-				ret = CyaSSL_get_error(ssl, 0);
+			if (wolfSSL_write(ssl, msg, strlen(msg)) != strlen(msg)) {
+				ret = wolfSSL_get_error(ssl, 0);
 				System_printf("Write error: %i.\n", ret);
 			}
 			while (internal_flag) {
-				nbytes = CyaSSL_read(ssl, (char *) buffer, TCPPACKETSIZE);
+				nbytes = wolfSSL_read(ssl, (char *) buffer, TCPPACKETSIZE);
 				if (nbytes > 0) {
 					internal_flag = false;
 				}
 			}
 			/* success */
 			System_printf("Heard: \"%s\".\n", buffer);
-			CyaSSL_free(ssl);
+			wolfSSL_free(ssl);
 			fdClose((SOCKET) sockfd);
 			flag = false;
 		}
@@ -233,9 +233,9 @@ Void tcpHandler(UArg arg0, UArg arg1) {
 		exitApp(ctx);
 
 	} else {
-		CyaSSL_free(ssl);
+		wolfSSL_free(ssl);
 		fdClose((SOCKET) sockfd);
-		System_printf("CyaSSL_connect failed.\n");
+		System_printf("wolfSSL_connect failed.\n");
 		fdCloseSession(TaskSelf());
 		exitApp(ctx);
 	}
@@ -245,10 +245,10 @@ Void tcpHandler(UArg arg0, UArg arg1) {
  *  ======== exitApp ========
  *  Cleans up the SSL context and exits the application
  */
-void exitApp(CYASSL_CTX* ctx) {
+void exitApp(WOLFSSL_CTX* ctx) {
 	if (ctx != NULL) {
-		CyaSSL_CTX_free(ctx);
-		CyaSSL_Cleanup();
+		wolfSSL_CTX_free(ctx);
+		wolfSSL_Cleanup();
 	}
 
 	BIOS_exit(-1);
@@ -284,7 +284,7 @@ int main(void) {
 	Board_initEMAC();
 
 	/*
-	 * CyaSSL library needs time() for validating certificates.
+	 * wolfSSL library needs time() for validating certificates.
 	 * USER STEP: Set up the current time in seconds below.
 	 */
 	MYTIME_init();

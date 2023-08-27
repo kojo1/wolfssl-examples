@@ -1,51 +1,61 @@
 /* aes-file-encrypt.c
  *
- * Copyright (C) 2006-2014 wolfSSL Inc.
- * This file is part of CyaSSL.
+ * Copyright (C) 2006-2020 wolfSSL Inc.
  *
- * CyaSSL is free software; you can redistribute it and/or modify
+ * This file is part of wolfSSL. (formerly known as CyaSSL)
+ *
+ * wolfSSL is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  *
- * CyaSSL is distributed in the hope that it will be useful,
+ * wolfSSL is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
 #include <stdio.h>
 #include <unistd.h>
 #include <termios.h>
-#include <cyassl/options.h>
-#include <cyassl/ctaocrypt/aes.h>
-#include <cyassl/ctaocrypt/sha256.h>
-#include <cyassl/ctaocrypt/random.h>
-#include <cyassl/ctaocrypt/pwdbased.h>
+
+#ifndef WOLFSSL_USER_SETTINGS
+    #include <wolfssl/options.h>
+#endif
+#include <wolfssl/wolfcrypt/settings.h>
+#include <wolfssl/wolfcrypt/aes.h>
+#include <wolfssl/wolfcrypt/sha256.h>
+#include <wolfssl/wolfcrypt/random.h>
+#include <wolfssl/wolfcrypt/pwdbased.h>
+
+#if defined(HAVE_PBKDF2) && !defined(NO_PWDBASED)
 
 #define SALT_SIZE 8
 
 /*
- * Makes a cyptographically secure key by stretching a user entered key
+ * Makes a cryptographically secure key by stretching a user entered key
  */
-int GenerateKey(RNG* rng, byte* key, int size, byte* salt, int pad)
+int GenerateKey(WC_RNG* rng, byte* key, int size, byte* salt, int pad)
 {
     int ret;
 
-    ret = RNG_GenerateBlock(rng, salt, SALT_SIZE);
+    ret = wc_RNG_GenerateBlock(rng, salt, SALT_SIZE);
     if (ret != 0)
         return -1020;
 
     if (pad == 0)
         salt[0] = 0;
+    /* salt[0] == 0 should only be used if pad == 0 */
+    else if (salt[0] == 0)
+        salt[0] = 1;
 
     /* stretches key */
-    ret = PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
-    	size, SHA256);
+    ret = wc_PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
+        size, WC_SHA256);
     if (ret != 0)
         return -1030;
 
@@ -53,11 +63,11 @@ int GenerateKey(RNG* rng, byte* key, int size, byte* salt, int pad)
 }
 
 /*
- * Encrypts a file using AES 
+ * Encrypts a file using AES
  */
 int AesEncrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
 {
-    RNG     rng;
+    WC_RNG     rng;
     byte    iv[AES_BLOCK_SIZE];
     byte*   input;
     byte*   output;
@@ -83,39 +93,39 @@ int AesEncrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
     input = malloc(length);
     output = malloc(length);
 
-    ret = InitRng(&rng);
+    ret = wc_InitRng(&rng);
     if (ret != 0) {
         printf("Failed to initialize random number generator\n");
         return -1030;
     }
 
-    /* reads from inFile and wrties whatever is there to the input array */
+    /* reads from inFile and writes whatever is there to the input array */
     ret = fread(input, 1, inputLength, inFile);
     if (ret == 0) {
         printf("Input file does not exist.\n");
         return -1010;
     }
     for (i = inputLength; i < length; i++) {
-        /* padds the added characters with the number of pads */
+        /* pads the added characters with the number of pads */
         input[i] = padCounter;
     }
 
-    ret = RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
+    ret = wc_RNG_GenerateBlock(&rng, iv, AES_BLOCK_SIZE);
     if (ret != 0)
         return -1020;
 
     /* stretches key to fit size */
     ret = GenerateKey(&rng, key, size, salt, padCounter);
-    if (ret != 0) 
+    if (ret != 0)
         return -1040;
 
     /* sets key */
-    ret = AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_ENCRYPTION);
+    ret = wc_AesSetKey(aes, key, size, iv, AES_ENCRYPTION);
     if (ret != 0)
         return -1001;
 
-    /* encrypts the message to the ouput based on input length + padding */
-    ret = AesCbcEncrypt(aes, output, input, length);
+    /* encrypts the message to the output based on input length + padding */
+    ret = wc_AesCbcEncrypt(aes, output, input, length);
     if (ret != 0)
         return -1005;
 
@@ -133,16 +143,17 @@ int AesEncrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
     free(key);
     fclose(inFile);
     fclose(outFile);
+    wc_FreeRng(&rng);
 
     return ret;
 }
 
 /*
- * Decryptsr a file using AES 
+ * Decrypts a file using AES
  */
 int AesDecrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
 {
-    RNG     rng;
+    WC_RNG     rng;
     byte    iv[AES_BLOCK_SIZE];
     byte*   input;
     byte*   output;
@@ -161,9 +172,9 @@ int AesDecrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
     input = malloc(aSize);
     output = malloc(aSize);
 
-    InitRng(&rng);
+    wc_InitRng(&rng);
 
-    /* reads from inFile and wrties whatever is there to the input array */
+    /* reads from inFile and writes whatever is there to the input array */
     ret = fread(input, 1, length, inFile);
     if (ret == 0) {
         printf("Input file does not exist.\n");
@@ -179,13 +190,13 @@ int AesDecrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
     }
 
     /* replicates old key if keys match */
-    ret = PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
-    	size, SHA256);
+    ret = wc_PBKDF2(key, key, strlen((const char*)key), salt, SALT_SIZE, 4096,
+        size, WC_SHA256);
     if (ret != 0)
         return -1050;
 
     /* sets key */
-    ret = AesSetKey(aes, key, AES_BLOCK_SIZE, iv, AES_DECRYPTION);
+    ret = wc_AesSetKey(aes, key, size, iv, AES_DECRYPTION);
     if (ret != 0)
         return -1002;
 
@@ -196,7 +207,7 @@ int AesDecrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
         input[i] = input[i + (AES_BLOCK_SIZE + SALT_SIZE)];
     }
     /* decrypts the message to output based on input length + padding*/
-    ret = AesCbcDecrypt(aes, output, input, length);
+    ret = wc_AesCbcDecrypt(aes, output, input, length);
     if (ret != 0)
         return -1006;
 
@@ -216,6 +227,7 @@ int AesDecrypt(Aes* aes, byte* key, int size, FILE* inFile, FILE* outFile)
     free(key);
     fclose(inFile);
     fclose(outFile);
+    wc_FreeRng(&rng);
 
     return 0;
 }
@@ -233,7 +245,7 @@ void help()
 }
 
 /*
- * temporarily deisables echoing in terminal for secure key input
+ * temporarily disables echoing in terminal for secure key input
  */
 int NoEcho(char* key, int size)
 {
@@ -246,27 +258,41 @@ int NoEcho(char* key, int size)
     nflags.c_lflag |= ECHONL;
 
     if (tcsetattr(fileno(stdin), TCSANOW, &nflags) != 0) {
-        printf("Error\n");
+        printf("Error: tcsetattr failed to disable terminal echo\n");
         return -1060;
     }
 
-    printf("Key: ");
-    fgets(key, size, stdin);
+    printf("Unique Password: ");
+    if (fgets(key, size, stdin) == NULL) {
+        printf("Error: fgets failed to retrieve secure key input\n");
+        return -1070;
+    }
+
     key[strlen(key) - 1] = 0;
 
     /* restore terminal */
     if (tcsetattr(fileno(stdin), TCSANOW, &oflags) != 0) {
-        printf("Error\n");
-        return -1070;
+        printf("Error: tcsetattr failed to enable terminal echo\n");
+        return -1080;
     }
     return 0;
 }
 
-int SizeCheck(int size)
+int SizeCheck(int *size)
 {
     int ret = 0;
 
-    if (size != 128 && size != 192 && size != 256) {
+    /* Use key size values (size/8) */
+    if (*size == 128) {
+        *size = AES_128_KEY_SIZE;
+    }
+    else if (*size == 192) {
+        *size = AES_192_KEY_SIZE;
+    }
+    else if (*size == 256) {
+        *size = AES_256_KEY_SIZE;
+    }
+    else {
         /* if the entered size does not match acceptable size */
         printf("Invalid AES key size\n");
         ret = -1080;
@@ -279,8 +305,8 @@ int main(int argc, char** argv)
 {
     Aes    aes;
     byte*  key;       /* user entered key */
-    FILE*  inFile;
-    FILE*  outFile;
+    FILE*  inFile = NULL;
+    FILE*  outFile = NULL;
 
     const char* in;
     const char* out;
@@ -296,12 +322,12 @@ int main(int argc, char** argv)
         switch (option) {
             case 'd': /* if entered decrypt */
                 size = atoi(optarg);
-                ret = SizeCheck(size);
+                ret = SizeCheck(&size);
                 choice = 'd';
                 break;
             case 'e': /* if entered encrypt */
                 size = atoi(optarg);
-                ret = SizeCheck(size);
+                ret = SizeCheck(&size);
                 choice = 'e';
                 break;
             case 'h': /* if entered 'help' */
@@ -330,18 +356,27 @@ int main(int argc, char** argv)
             printf("Must have both input and output file");
             printf(": -i filename -o filename\n");
     }
-    else if (ret == 0 && choice != 'n') {
+    else if (ret == 0 && choice != 'n' && inFile != NULL) {
         key = malloc(size);    /* sets size memory of key */
         ret = NoEcho((char*)key, size);
-        if (choice == 'e') 
+        if (choice == 'e')
             AesEncrypt(&aes, key, size, inFile, outFile);
         else if (choice == 'd')
             AesDecrypt(&aes, key, size, inFile, outFile);
     }
     else if (choice == 'n') {
-        printf("Must select either -e or -d for encryption and decryption\n");
+        printf("Must select either -e[128, 192, 256] or -d[128, 192, 256] \
+                for encryption and decryption\n");
         ret = -110;
     }
-    
+
     return ret;
 }
+
+#else
+int main()
+{
+    printf("pwdbased and HAVE_PBKDF2 not compiled in\n");
+    return 0;
+}
+#endif
