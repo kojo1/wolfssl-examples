@@ -1,6 +1,6 @@
-/* blink.h
+/* bench_main.c
  *
- * Copyright (C) 2006-2023 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -19,6 +19,37 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
  */
 
-void blink(int n, int init);
+#include <stdint.h>
 
-#define WOLF_BLINK_INIT 1
+#include "wolfssl/wolfcrypt/settings.h"
+#include "wolfssl/ssl.h"
+#include <wolfcrypt/benchmark/benchmark.h>
+
+#include <stdio.h>
+#include "pico/stdlib.h"
+#include "pico/cyw43_arch.h"
+#include "wolf/blink.h"
+
+#include "hardware/clocks.h"
+
+int main(int argc, char **argv)
+{
+    int i;
+    int ret;
+
+    blink(10, WOLF_BLINK_INIT);
+    printf("\nHit any key to start\n");
+    getchar();
+
+    printf("\nSystem clock = %dMHz\n\n", clock_get_hz(clk_sys)/1000000);
+    ret = benchmark_test(NULL);
+    printf("End: %d\n", ret);
+    return ret;
+}
+
+#include <time.h>
+time_t myTime(time_t *t)
+{
+    *t = (((2023 - 1970) * 12 + 8) * 30 * 24 * 60 * 60);
+    return *t;
+}

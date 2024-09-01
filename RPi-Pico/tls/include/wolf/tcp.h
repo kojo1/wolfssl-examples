@@ -1,4 +1,4 @@
-/* wifi.h
+/* tcp.h
  *
  * Copyright (C) 2006-2023 wolfSSL Inc.
  *
@@ -19,5 +19,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
  */
 
-int wolf_wifiConnect(const char *ssid, const char *pw, uint32_t auth, uint32_t timeout);
-int wolf_wifiDisconnect(void);
+#ifndef TCP_H
+#define TCP_H
+
+void tcp_initThread(void);
+
+#endif
+

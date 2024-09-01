@@ -1,4 +1,4 @@
-/* wifi.c
+/* blink.c
  *
  * Copyright (C) 2006-2023 wolfSSL Inc.
  *
@@ -19,35 +19,40 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1335, USA
  */
 
-#include <stdio.h>
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 
-#include "wolf/common.h"
+#ifdef PICO_CYW43_ARCH_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+#define SLEEP_MS vTaskDelay
+#else
+#define SLEEP_MS sleep_ms
+#endif
 
-int wolf_wifiConnect(const char *ssid, const char *pw, uint32_t auth, uint32_t timeout)
+void blink(int n, int init)
 {
-    int retry;
-    #define MAX_RETRY 5
-    printf("Initializing Wi-Fi...\n");
-    cyw43_arch_enable_sta_mode();
+    int i;
 
-    for(retry = 0; retry < MAX_RETRY; retry++) {
-        if (cyw43_arch_wifi_connect_timeout_ms(ssid, pw, auth, timeout)) {
-            fprintf(stderr, "failed to connect. Retrying\n");
-        } else {
-            return WOLF_SUCCESS;
+    if (init)
+    {
+        stdio_init_all();
+        if (cyw43_arch_init_with_country(CYW43_COUNTRY_JAPAN))
+        {
+            while (1)
+            {
+                cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+                 SLEEP_MS(25);
+                cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+                 SLEEP_MS(25);
+            }
         }
-        sleep_ms(1000);
     }
-    return WOLF_FAIL;
+    for (i = 0; i < n; i++)
+    {
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);
+         SLEEP_MS(250);
+        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+         SLEEP_MS(250);
+    }
 }
-
-int wolf_wifiDisconnect(void)
-{
-    cyw43_arch_deinit();
-    printf("Wifi disconnected\n");
-
-    return 0;
-}
-
